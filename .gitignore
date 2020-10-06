@@ -1,4 +1,5 @@
 images/color/*.jpg
 images/edge/*.jpg
+images/generated_images/*.jpg
 *.xml
 *.iml
