@@ -248,6 +248,7 @@ import numpy as np
 import keras.backend as K
 from keras.preprocessing.image import array_to_img, img_to_array, load_img
 import re
+from PIL import Image
 
 import tensorflow as tf
 import six
@@ -377,7 +378,7 @@ def train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_n
     model.save_weights(model_dir+model_name)
 
 def predict(img_height, img_width, target_img_path, model_path):
-    model = unet()
+    model = unet(img_height, img_width)
     model.compile(loss='categorical_crossentropy', optimizer=Adam(lr=0.001, beta_1=0.5), metrics=['accuracy'])
     model.load_weights(model_path)
     X, Y = [], []
@@ -390,21 +391,49 @@ def predict(img_height, img_width, target_img_path, model_path):
     image = (model.predict(np.reshape(X[0], (1, img_height, img_width, 1)), verbose=0))
     image = np.reshape(image, (img_height, img_width, 3))
     image = image * 255
-    Image.fromarray(image.astype(np.uint8)).save("predict.png")
+    pil_image = Image.fromarray(image.astype(np.uint8))
+    width, height = Image.open(target_img_path).size
+    resizeImage = pil_image.resize((width, height))
+    resizeImage.save("predict.png")
 
 if __name__=="__main__":
     Batch_size = 16
     Epoch_num = 1000
-    stepping_num = 10
-    backup_num = 3
-    img_height, img_width = 90, 160
+    stepping_num = 10#学習中モデルを使って画像を生成する回数
+    backup_num = 3#学習中にモデルを何回保存するか
+    img_height, img_width = 90, 160#PCが計算に耐えられるなら大きければ大きいほどいい
     GENERATED_IMAGE_PATH = './images/generated_images/'  # 生成画像の保存先ディレクトリ
     model_dir = "./model/"
     model_name = "AutoColor.h5"
     x_dir = './images/edge/'
     y_dir = './images/color/'
-    train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_num, backup_num, model_dir, model_name)#学習
-    #predict(img_height, img_width, target_img_path, model_dir+model_name)#評価
+
+    #モデル生成　※評価だけしたい場合はコメントアウト
+    train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_num, backup_num, model_dir, model_name)
+
+    #評価
+    target_img_path = "./images/example/test_predict.jpg"
+    predict(img_height, img_width, target_img_path, model_dir+model_name)#評価
 ```
 
 こんな感じです。ネットワークはUnetを利用します。
+画像サイズは大きいのがベストですが、GPUメモリが大きい容量のものが必要です。
+エポック数は実際にはもっと行った方がいいです。今回は時間の問題もあるので1000回で行います。
+各自行う際は、大目に設定するのをお勧めします。
+また、事前に取得・線画化した画像枚数は多ければ多いほどいいです。
+
+さっそく実行
+```commandline
+python train.py
+```
+
+結果を見てみましょう
+以下の図のような形になりました。
+![result](images/example/convert_result.jpg "サンプル")
+
+###・・。うん、頑張ってる感はあるよ！！
+まぁコードはできたので、好きに画像収集とハイパーパラメータをいじって遊んでみてください(笑)
+
+ここまでお疲れ様でした。
+次は、サービス化をするためにFlaskでページを作成してWEBアプリとして完成させます。
+次でラストになりますので、気張っていきましょ～。

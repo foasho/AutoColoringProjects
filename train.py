@@ -171,8 +171,8 @@ if __name__=="__main__":
     x_dir = './images/edge/'
     y_dir = './images/color/'
 
-    #モデル生成
-    #train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_num, backup_num, model_dir, model_name)
+    #モデル生成　※評価だけしたい場合はコメントアウト
+    train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_num, backup_num, model_dir, model_name)
 
     #評価
     target_img_path = "./images/example/test_predict.jpg"
