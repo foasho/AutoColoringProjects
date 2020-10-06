@@ -149,3 +149,71 @@ python scraping.py
 ただこれでは少ないので、空と雲の検索URLもスクレイピングし、150枚の画像を収集しました。
 当然画像は少ないですが、とりあえずこれで進めていきます。
 
+
+##2.画像データの線画化
+こんにちは、前回に引き続き、自動着彩AIアプリを作ろう第3回目です。
+読むのが面倒なときは、
+```commandline
+git clone https://github.com/foasho/AutoColoringProjects.git
+pip install -r requirements.txt
+python edge_transration.py
+```
+この3行で終わります。
+
+まず必要なライブラリのインストールから
+```commandline
+pip install opencv-contrib-python==4.2.0.34
+pip install opencv-python==4.2.0.34
+pip install numpy==1.16.4
+```
+
+今日編集するのは、edge_transration.py
+早速コードを書いていきましょう。
+```python
+import cv2
+import numpy as np
+import os
+
+#線画変換
+def edge_detect(cv2img):
+    gray = cv2.cvtColor(cv2img, cv2.COLOR_BGR2GRAY)
+    cv2.merge((gray, gray, gray), cv2img)
+    kernel = np.ones((4, 4), np.uint8)
+    dilation = cv2.dilate(cv2img, kernel, iterations=1)
+    diff = cv2.subtract(dilation, cv2img)
+    negaposi = 255 - diff
+    return negaposi
+
+if __name__=='__main__':
+    target_dir = "./images/color/"
+    save_dir_edge = "./images/edge/"
+    if not os.path.exists(save_dir_edge):
+        os.makedirs(save_dir_edge)
+    image_names = os.listdir(target_dir)
+    for image_name in image_names:
+        read_path = target_dir + image_name
+        try:
+            color_image = cv2.imread(read_path)
+            edge_image = edge_detect(color_image)
+            cv2.imwrite(save_dir_edge + image_name + ".jpg", edge_image)
+        except Exception as e:
+            print(read_path)
+            print("error")
+            print(e)
+```
+
+たったこれだけです。
+あとは、実行
+```commandline
+python edge_transration.py
+```
+これでimages/edge内に線画の画像が追加されたのを確認できればOKです。
+
+お疲れ様でした。
+次はとうとう用意した線画とカラー画像を使ってAIモデル学習をします。
+PCはGPUでの計算推奨です。
+されていない場合は、[Qiitaで設定の仕方の記事](https://qiita.com/osakasho/items/e3b0b14bd26ae1060413)
+を書いているので、そちらを行ってから、次のセクションを行ってください。
+
+ではまた。
+
