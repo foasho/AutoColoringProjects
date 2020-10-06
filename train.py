@@ -156,15 +156,15 @@ def predict(img_height, img_width, target_img_path, model_path):
     image = image * 255
     pil_image = Image.fromarray(image.astype(np.uint8))
     width, height = Image.open(target_img_path).size
-    resizeImage = pil_image.resize((height, width))
+    resizeImage = pil_image.resize((width, height))
     resizeImage.save("predict.png")
 
 if __name__=="__main__":
     Batch_size = 16
     Epoch_num = 1000
-    stepping_num = 10
-    backup_num = 3
-    img_height, img_width = 90, 160
+    stepping_num = 10#学習中モデルを使って画像を生成する回数
+    backup_num = 3#学習中にモデルを何回保存するか
+    img_height, img_width = 90, 160#PCが計算に耐えられるなら大きければ大きいほどいい
     GENERATED_IMAGE_PATH = './images/generated_images/'  # 生成画像の保存先ディレクトリ
     model_dir = "./model/"
     model_name = "AutoColor.h5"
@@ -172,7 +172,7 @@ if __name__=="__main__":
     y_dir = './images/color/'
 
     #モデル生成
-    train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_num, backup_num, model_dir, model_name)#学習
+    #train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_num, backup_num, model_dir, model_name)
 
     #評価
     target_img_path = "./images/example/test_predict.jpg"
