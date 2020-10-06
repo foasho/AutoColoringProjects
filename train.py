@@ -11,6 +11,7 @@ import numpy as np
 import keras.backend as K
 from keras.preprocessing.image import array_to_img, img_to_array, load_img
 import re
+from PIL import Image
 
 import tensorflow as tf
 import six
@@ -89,7 +90,7 @@ def unet(img_height, img_width):
     return model
 
 
-def train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_num, model_dir, model_name):
+def train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_num, backup_num, model_dir, model_name):
     X, Y = [], []
     print("read x")
     for img in list_pictures(x_dir):
@@ -115,13 +116,15 @@ def train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_n
     print('Number of batches:', num_batches)
     stepping_epoch = Epoch_num//stepping_num
     print("GenerateImage Step OutPut Epoch:", stepping_epoch)
+    backup_epoch = Epoch_num//backup_num
+    print("WeightsData Step OutPut Epoch:", backup_epoch)
     for epoch in range(Epoch_num):
         for index in range(num_batches):
             X_batch = X[index * Batch_size:(index + 1) * Batch_size]
             Y_batch = Y[index * Batch_size:(index + 1) * Batch_size]
 
             # # 生成画像を出力
-            if index % 500 == 0:
+            if index % stepping_epoch == 0:
                 image = (model.predict(np.reshape(X[epoch * 9 % len(X)], (1, img_height, img_width, 1)), verbose=0))
                 image = np.reshape(image, (img_height, img_width, 3))
                 image = image * 255
@@ -129,7 +132,7 @@ def train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_n
                     os.makedirs(GENERATED_IMAGE_PATH)
                 Image.fromarray(image.astype(np.uint8)).save(GENERATED_IMAGE_PATH + "%04d_%04d.png" % (epoch, index))
 
-            if epoch % 1000 == 999:
+            if epoch % backup_epoch == 999:
                 model.save_weights(model_dir+str(epoch) + '_' + model_name)
 
             u_loss = model.train_on_batch(X_batch, Y_batch)
@@ -138,7 +141,7 @@ def train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_n
     model.save_weights(model_dir+model_name)
 
 def predict(img_height, img_width, target_img_path, model_path):
-    model = unet()
+    model = unet(img_height, img_width)
     model.compile(loss='categorical_crossentropy', optimizer=Adam(lr=0.001, beta_1=0.5), metrics=['accuracy'])
     model.load_weights(model_path)
     X, Y = [], []
@@ -151,17 +154,24 @@ def predict(img_height, img_width, target_img_path, model_path):
     image = (model.predict(np.reshape(X[0], (1, img_height, img_width, 1)), verbose=0))
     image = np.reshape(image, (img_height, img_width, 3))
     image = image * 255
-    Image.fromarray(image.astype(np.uint8)).save("predict.png")
+    pil_image = Image.fromarray(image.astype(np.uint8))
+    width, height = Image.open(target_img_path).size
+    resizeImage = pil_image.resize((height, width))
+    resizeImage.save("predict.png")
 
 if __name__=="__main__":
     Batch_size = 16
     Epoch_num = 1000
     stepping_num = 10
+    backup_num = 3
     img_height, img_width = 90, 160
     GENERATED_IMAGE_PATH = './images/generated_images/'  # 生成画像の保存先ディレクトリ
     model_dir = "./model/"
     model_name = "AutoColor.h5"
     x_dir = './images/edge/'
     y_dir = './images/color/'
-    train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_num, model_dir, model_name)#学習
-    #predict(img_height, img_width, target_img_path, model_dir+model_name)#評価
+    #モデル生成
+    #train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_num, backup_num, model_dir, model_name)#学習
+    #評価
+    target_img_path = "./images/example/test_predict.jpg"
+    predict(img_height, img_width, target_img_path, model_dir+model_name)#評価
