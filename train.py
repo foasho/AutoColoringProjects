@@ -170,8 +170,10 @@ if __name__=="__main__":
     model_name = "AutoColor.h5"
     x_dir = './images/edge/'
     y_dir = './images/color/'
+
     #モデル生成
-    #train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_num, backup_num, model_dir, model_name)#学習
+    train(x_dir, y_dir, img_height, img_width, Batch_size, Epoch_num, stepping_num, backup_num, model_dir, model_name)#学習
+
     #評価
     target_img_path = "./images/example/test_predict.jpg"
     predict(img_height, img_width, target_img_path, model_dir+model_name)#評価
