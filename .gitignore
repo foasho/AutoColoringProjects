@@ -1,6 +1,6 @@
 images/color/*.jpg
 images/edge/*.jpg
-images/generated_images/*.jpg
+images/generated_images/*
 predict.png
 *.xml
 *.iml

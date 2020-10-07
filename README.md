@@ -221,9 +221,12 @@ PCはGPUでの計算推奨です。
 こんにちは、前回に引き続き、自動着彩AIアプリを作ろう第4回目AI生成編です。
 とうとうですね。
 いつも通りコードの解説は面倒くさいのでしません。読み取ってください。
-Githubでそのままダウンロードできます
-```commandline
 
+読むのが面倒な方は以下の3行で。
+```commandline
+git clone https://github.com/foasho/AutoColoringProjects.git
+pip install -r requirements.txt
+python train.py
 ```
 
 早速始めましょう。
