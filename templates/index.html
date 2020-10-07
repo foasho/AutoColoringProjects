@@ -1,10 +1,160 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>自動着彩ペイントアプリ</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
 </head>
 <body>
+<div class="container mt-3">
+    <h2>自動着彩くん</h2>
+    <div class="row my-3">
+        <div class="col-md-6">
+            <input id="userfile" type="file" accept="image/png,image/jpeg" />
+        </div>
+        <div class="col-md-6">
+            <button class="btn btn-primary" onclick="startAutoColor()">自動着彩する</button>
+        </div>
+    </div>
+    <div class="row my-3">
+        <div class="col-md-6">
+            <h3>入力</h3>
+            <canvas id="draw_canvas"></canvas>
+            <button class="btn btn-info" onclick="clearCanvas()">クリア</button>
+        </div>
+        <div class="col-md-6">
+            <h3>出力</h3>
+            <img id="result_img" src="https://static.pingendo.com/cover-moon.svg"/>
+        </div>
+    </div>
+</div>
+<style>
+    body {
+        background: #f8ece9;
+    }
+    #draw_canvas {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.97);
+        cursor: pointer;
+    }
+    #result_img {
+        width: 100%;
+    }
+</style>
+<script>
+    var draw_canvas = document.getElementById('draw_canvas');
+    var draw_canvas_ctx = draw_canvas.getContext('2d');
+    var canvas_width = draw_canvas.clientWidth;
+    var canvas_height = draw_canvas.clientHeight;
+    draw_canvas.width = canvas_width;
+    draw_canvas.height = canvas_height;
+    draw_canvas_ctx.fillStyle = "#ffffff";
+    draw_canvas_ctx.fillRect(0, 0, canvas_width, canvas_height);
 
+    function clearCanvas() {
+        draw_canvas_ctx.fillStyle = "#ffffff";
+        draw_canvas_ctx.fillRect(0, 0, canvas_width, canvas_height);
+    }
+
+    var result_img = document.getElementById("result_img");
+
+    function startAutoColor() {
+        let formData = new FormData();
+        const target_url = "auto-color";
+        let image_data = draw_canvas.toDataURL("image/png");
+        image_data = image_data.replace(/^data:image\/png;base64,/, "");
+        formData.append("paint_image", image_data);
+        let record_request = new XMLHttpRequest();
+        record_request.open("POST", target_url, true);
+        const record_response = record_request.send(formData);
+        record_request.onload = function (oEvent) {
+            if (record_request.status == 200){
+                const result_image = record_request.response;
+                result_img.src = result_image;
+            }
+        };
+    }
+    //ファイルを選択したとき
+    document.getElementById("userfile").addEventListener("input", (event)=>{
+        const target = event.target;
+        const file = target.files[0];
+        if(!file.type.match('image.*')) {
+            alert('画像を選択してください');
+            return;
+        }
+        let image = new Image();
+        const reader = new FileReader();
+        reader.addEventListener("load", ()=>{
+            image.src = reader.result;
+            image.onload = function() {
+                var width, height;
+                if(image.width > image.height){
+                    var ratio = image.height/image.width;
+                    width = canvas_width;
+                    height = canvas_width * ratio;
+                } else {
+                    // 縦長の画像は縦のサイズを指定値にあわせる
+                    var ratio = image.width/image.height;
+                    width = canvas_height * ratio;
+                    height = canvas_height;
+                }
+                console.log("resize");
+                draw_canvas.width = width;
+                draw_canvas.height = height;
+                draw_canvas_ctx.drawImage(image, 0, 0, width, height);
+            }
+        });
+        reader.readAsDataURL(file);
+    });
+
+    //ペイント処理
+    // 描画用フラグ  true: 描画中   false: 描画中でない
+    var flgDraw = false;
+    // 座標
+    var gX = 0;
+    var gY = 0;
+    // 描画色
+    var gColor = '#000000';
+    window.onload = function() {
+        draw_canvas.addEventListener('mousedown', startDraw, false);
+        draw_canvas.addEventListener('mousemove', Draw, false);
+        draw_canvas.addEventListener('mouseup', endDraw, false);
+    }
+    // 描画開始
+    function startDraw(e){
+        flgDraw = true;
+        var pointerPosition = getRelativePosition(e.clientX, e.clientY);
+        gX = pointerPosition.x;
+        gY = pointerPosition.y;
+    }
+    // 描画
+    function Draw(e){
+        if (flgDraw == true){
+            var pointerPosition = getRelativePosition(e.clientX, e.clientY);
+            const x = pointerPosition.x;
+            const y = pointerPosition.y;
+            draw_canvas_ctx.lineWidth = 3;
+            draw_canvas_ctx.strokeStyle = gColor;
+            // 描画開始
+            draw_canvas_ctx.beginPath();
+            draw_canvas_ctx.moveTo(gX, gY);
+            draw_canvas_ctx.lineTo(x, y);
+            draw_canvas_ctx.closePath();
+            draw_canvas_ctx.stroke();
+            // 次の描画開始点
+            gX = x;
+            gY = y;
+        }
+    }
+    // 描画終了
+    function endDraw(){
+        flgDraw = false;
+    }
+    function getRelativePosition(absoluteX, absoluteY) {
+        var rect = draw_canvas.getBoundingClientRect();
+        return {x: absoluteX - rect.left, y: absoluteY - rect.top};
+    }
+</script>
 </body>
 </html>

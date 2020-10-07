@@ -440,3 +440,337 @@ python train.py
 ここまでお疲れ様でした。
 次は、サービス化をするためにFlaskでページを作成してWEBアプリとして完成させます。
 次でラストになりますので、気張っていきましょ～。
+
+
+##自動着彩AIをWEBアプリ化してみよう
+こんにちは！
+GDSの審査に通ってから毎朝何かしらUpしようとルーティーンにブログ更新を入れているのですが、正直きついです。朝、夜の更新だったのを朝のみの更新にしました。
+
+そんなことはどうでもよくてとうとう自動着彩シリーズも今回で終わりです。
+ソースはオープンソースにするので、各自自由にいじって理想のサービスに昇華させてポートフォリオ等の一部にしてもらえたらと思います。
+
+毎度のことながら、読むのが面倒な方は以下の4行で完結します
+```commandline
+git clone https://github.com/foasho/AutoColoringProjects.git
+pip uninstall tensorflow-gpu
+pip install flask==1.1.2 tensorflow==1.14.0
+python server.py
+```
+
+では、さっそくやっていきましょう。
+```commandline
+pip install flask==1.1.2
+pip uninstall tensorflow-gpu==1.14.0
+pip install tensorflow==1.14.0
+```
+
+まずは、HTMLでページを作りましょう。
+templatesフォルダの中にあるindex.htmlを編集
+本当はstaticにcssとjsのようなフォルダを作るのですが、
+今回は、HTMLにそのまま書きます。
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>自動着彩ペイントアプリ</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+</head>
+<body>
+<div class="container mt-3">
+    <h2>自動着彩くん</h2>
+    <div class="row my-3">
+        <div class="col-md-6">
+            <input id="userfile" type="file" accept="image/png,image/jpeg" />
+        </div>
+        <div class="col-md-6">
+            <button class="btn btn-primary" onclick="startAutoColor()">自動着彩する</button>
+        </div>
+    </div>
+    <div class="row my-3">
+        <div class="col-md-6">
+            <h3>入力</h3>
+            <canvas id="draw_canvas"></canvas>
+            <button class="btn btn-info" onclick="clearCanvas()">クリア</button>
+        </div>
+        <div class="col-md-6">
+            <h3>出力</h3>
+            <img id="result_img" src="https://static.pingendo.com/cover-moon.svg"/>
+        </div>
+    </div>
+</div>
+<style>
+    body {
+        background: #f8ece9;
+    }
+    #draw_canvas {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.97);
+        cursor: pointer;
+    }
+    #result_img {
+        width: 100%;
+    }
+</style>
+<script>
+    var draw_canvas = document.getElementById('draw_canvas');
+    var draw_canvas_ctx = draw_canvas.getContext('2d');
+    var canvas_width = draw_canvas.clientWidth;
+    var canvas_height = draw_canvas.clientHeight;
+    draw_canvas.width = canvas_width;
+    draw_canvas.height = canvas_height;
+    draw_canvas_ctx.fillStyle = "#ffffff";
+    draw_canvas_ctx.fillRect(0, 0, canvas_width, canvas_height);
+
+    function clearCanvas() {
+        draw_canvas_ctx.fillStyle = "#ffffff";
+        draw_canvas_ctx.fillRect(0, 0, canvas_width, canvas_height);
+    }
+
+    var result_img = document.getElementById("result_img");
+
+    function startAutoColor() {
+        let formData = new FormData();
+        const target_url = "auto-color";
+        let image_data = draw_canvas.toDataURL("image/png");
+        image_data = image_data.replace(/^data:image\/png;base64,/, "");
+        formData.append("paint_image", image_data);
+        let record_request = new XMLHttpRequest();
+        record_request.open("POST", target_url, true);
+        const record_response = record_request.send(formData);
+        record_request.onload = function (oEvent) {
+            if (record_request.status == 200){
+                const result_image = record_request.response;
+                result_img.src = result_image;
+            }
+        };
+    }
+    //ファイルを選択したとき
+    document.getElementById("userfile").addEventListener("input", (event)=>{
+        const target = event.target;
+        const file = target.files[0];
+        if(!file.type.match('image.*')) {
+            alert('画像を選択してください');
+            return;
+        }
+        let image = new Image();
+        const reader = new FileReader();
+        reader.addEventListener("load", ()=>{
+            image.src = reader.result;
+            image.onload = function() {
+                var width, height;
+                if(image.width > image.height){
+                    var ratio = image.height/image.width;
+                    width = canvas_width;
+                    height = canvas_width * ratio;
+                } else {
+                    // 縦長の画像は縦のサイズを指定値にあわせる
+                    var ratio = image.width/image.height;
+                    width = canvas_height * ratio;
+                    height = canvas_height;
+                }
+                console.log("resize");
+                draw_canvas.width = width;
+                draw_canvas.height = height;
+                draw_canvas_ctx.drawImage(image, 0, 0, width, height);
+            }
+        });
+        reader.readAsDataURL(file);
+    });
+
+    //ペイント処理
+    // 描画用フラグ  true: 描画中   false: 描画中でない
+    var flgDraw = false;
+    // 座標
+    var gX = 0;
+    var gY = 0;
+    // 描画色
+    var gColor = '#000000';
+    window.onload = function() {
+        draw_canvas.addEventListener('mousedown', startDraw, false);
+        draw_canvas.addEventListener('mousemove', Draw, false);
+        draw_canvas.addEventListener('mouseup', endDraw, false);
+    }
+    // 描画開始
+    function startDraw(e){
+        flgDraw = true;
+        var pointerPosition = getRelativePosition(e.clientX, e.clientY);
+        gX = pointerPosition.x;
+        gY = pointerPosition.y;
+    }
+    // 描画
+    function Draw(e){
+        if (flgDraw == true){
+            var pointerPosition = getRelativePosition(e.clientX, e.clientY);
+            const x = pointerPosition.x;
+            const y = pointerPosition.y;
+            draw_canvas_ctx.lineWidth = 3;
+            draw_canvas_ctx.strokeStyle = gColor;
+            // 描画開始
+            draw_canvas_ctx.beginPath();
+            draw_canvas_ctx.moveTo(gX, gY);
+            draw_canvas_ctx.lineTo(x, y);
+            draw_canvas_ctx.closePath();
+            draw_canvas_ctx.stroke();
+            // 次の描画開始点
+            gX = x;
+            gY = y;
+        }
+    }
+    // 描画終了
+    function endDraw(){
+        flgDraw = false;
+    }
+    function getRelativePosition(absoluteX, absoluteY) {
+        var rect = draw_canvas.getBoundingClientRect();
+        return {x: absoluteX - rect.left, y: absoluteY - rect.top};
+    }
+</script>
+</body>
+</html>
+```
+
+次にconfig.pyにAIモデルの重みファイルのパスを追加
+```python
+import os
+abs_path = os.getcwd()
+
+class Env:
+    ChromeDriver = abs_path + "\static\driver\chromedriver.exe"
+    ScrapingCoolTime = 3
+
+    MODEL_PATH = "static/model/AutoColor.h5"
+```
+
+新規ファイルauto_color.pyを新規作成
+※config.pyと同じ階層
+```python
+# -*- coding: utf-8 -*-
+import numpy as np
+from keras.models import load_model, Model
+from keras.layers import Input, Conv2D, BatchNormalization, Activation, Conv2DTranspose, Concatenate
+from keras.optimizers import Adam
+from keras.preprocessing.image import array_to_img, img_to_array, load_img
+from PIL import Image
+import tensorflow as tf
+
+from config import Env
+
+def getModel(img_height, img_width):
+    input_layer = Input(shape=(img_height, img_width, 1))
+    conv1 = Conv2D(32, (3, 3), strides=(1, 1))(input_layer)
+    conv1 = BatchNormalization()(conv1)
+    conv1 = Activation('relu')(conv1)
+
+    conv2 = Conv2D(64, (4, 4), strides=(2, 2))(conv1)
+    conv2 = BatchNormalization()(conv2)
+    conv2 = Activation('relu')(conv2)
+
+    conv3 = Conv2D(128, (3, 4), strides=(2, 2))(conv2)
+    conv3 = BatchNormalization()(conv3)
+    conv3 = Activation('relu')(conv3)
+
+    conv4 = Conv2D(256, (3, 4), strides=(2, 2))(conv3)
+    conv4 = BatchNormalization()(conv4)
+    conv4 = Activation('relu')(conv4)
+
+    conv5 = Conv2D(512, (2, 2), strides=(1, 1))(conv4)
+    conv5 = BatchNormalization()(conv5)
+    conv5 = Activation('relu')(conv5)
+
+    # 底辺
+    conv6 = Conv2D(1024, (2, 2), strides=(1, 1))(conv5)  # 9x17 -> 8x16
+    conv6 = BatchNormalization()(conv6)
+    conv6 = Activation('relu')(conv6)
+    # ##############
+
+    # 折返し
+    uconv6 = Conv2DTranspose(512, (2, 2), strides=(1, 1))(conv6)
+    uconv6 = BatchNormalization()(uconv6)
+    uconv6 = Activation('relu')(uconv6)
+    uconv6 = Concatenate()([conv5, uconv6])
+
+    uconv5 = Conv2DTranspose(256, (2, 2), strides=(1, 1))(uconv6)
+    uconv5 = BatchNormalization()(uconv5)
+    uconv5 = Activation('relu')(uconv5)
+    uconv5 = Concatenate()([conv4, uconv5])
+
+    uconv4 = Conv2DTranspose(128, (3, 4), strides=(2, 2))(uconv5)
+    uconv4 = BatchNormalization()(uconv4)
+    uconv4 = Activation('relu')(uconv4)
+    uconv4 = Concatenate()([conv3, uconv4])
+
+    uconv3 = Conv2DTranspose(64, (3, 4), strides=(2, 2))(uconv4)
+    uconv3 = BatchNormalization()(uconv3)
+    uconv3 = Activation('relu')(uconv3)
+    uconv3 = Concatenate()([conv2, uconv3])
+
+    uconv2 = Conv2DTranspose(32, (4, 4), strides=(2, 2))(uconv3)
+    uconv2 = BatchNormalization()(uconv2)
+    uconv2 = Activation('relu')(uconv2)
+    uconv2 = Concatenate()([conv1, uconv2])
+
+    uconv1 = Conv2DTranspose(3, (3, 3), strides=(1, 1))(uconv2)
+    uconv1 = BatchNormalization()(uconv1)
+    uconv1 = Activation('relu')(uconv1)
+
+    model = Model(input_layer, uconv1)
+    # model.summary()
+
+    return model
+
+img_height, img_width = 90, 160
+model = getModel(img_height, img_width)
+model.compile(loss='categorical_crossentropy', optimizer=Adam(lr=0.001, beta_1=0.5), metrics=['accuracy'])
+model.load_weights(Env.MODEL_PATH)
+model._make_predict_function()
+graph = tf.get_default_graph()
+
+def autoColor(pil_image):
+    width, height = pil_image.size
+    pil_image = pil_image.resize((img_width, img_height)).convert('L')
+    X, Y = [], []
+    # 単独着彩
+    X.append(img_to_array(pil_image))
+    X = np.asarray(X)
+    X = X.astype(np.float32) / 255
+    global graph
+    with graph.as_default():
+        image = (model.predict(np.reshape(X[0], (1, img_height, img_width, 1)), verbose=0))
+    image = np.reshape(image, (img_height, img_width, 3))
+    image = image * 255
+    result_image = Image.fromarray(image.astype(np.uint8))
+    resizeImage = result_image.resize((width, height))
+    return resizeImage
+```
+
+server.pyの編集
+```python
+from flask import Flask, request, render_template, abort
+import base64
+from PIL import Image
+from io import BytesIO
+from auto_color import autoColor
+
+app = Flask(__name__)
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/auto-color", methods=['POST'])
+def auto_color():
+    paint_image = request.form['paint_image']
+    img_binary = base64.b64decode(paint_image)
+    pil_image = Image.open(BytesIO(img_binary))
+    resultImage = autoColor(pil_image)
+    buffered = BytesIO()
+    resultImage.save(buffered, format="JPEG")
+    img_str = "data:image/jpeg;base64," + base64.b64encode(buffered.getvalue()).decode("ascii")
+    return img_str
+
+if __name__ == '__main__':
+    app.run()
+
+```
